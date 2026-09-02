@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { AddTransactionTrigger } from "@/components/add-transaction-trigger";
 import { UserSwitcher } from "@/components/user-switcher";
 import { getAllUsers, getCurrentUser } from "@/lib/current-user";
+import { getAllPaymentMethods, getCategoriesByKind } from "@/lib/queries/categories";
 
 const NAV_ITEMS = [
   { href: "/", label: "Дашборд" },
@@ -15,9 +17,11 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [users, currentUser] = await Promise.all([
+  const [users, currentUser, categories, paymentMethods] = await Promise.all([
     getAllUsers(),
     getCurrentUser(),
+    getCategoriesByKind(),
+    getAllPaymentMethods(),
   ]);
 
   return (
@@ -35,7 +39,17 @@ export default async function AppLayout({
               </Link>
             ))}
           </nav>
-          <UserSwitcher users={users} currentUserId={currentUser?.id ?? null} />
+          <div className="flex items-center gap-3">
+            {currentUser && (
+              <AddTransactionTrigger
+                categories={categories}
+                users={users}
+                paymentMethods={paymentMethods}
+                currentUserId={currentUser.id}
+              />
+            )}
+            <UserSwitcher users={users} currentUserId={currentUser?.id ?? null} />
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
