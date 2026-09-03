@@ -120,6 +120,25 @@ export async function getHistoryRowsForExport(filters: HistoryFilters) {
     .orderBy(orderFn(sortColumn), desc(transactions.createdAt));
 }
 
+export async function getRecentTransactions(limit: number) {
+  return db
+    .select({
+      id: transactions.id,
+      occurredOn: transactions.occurredOn,
+      kind: transactions.kind,
+      amount: transactions.amount,
+      note: transactions.note,
+      categoryName: categories.name,
+      categoryColor: categories.color,
+      paidByName: users.displayName,
+    })
+    .from(transactions)
+    .innerJoin(categories, eq(transactions.categoryId, categories.id))
+    .innerJoin(users, eq(transactions.paidByUserId, users.id))
+    .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt))
+    .limit(limit);
+}
+
 export async function getTransactionById(id: string) {
   const [row] = await db
     .select()
