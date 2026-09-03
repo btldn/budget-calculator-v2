@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AddTransactionProvider } from "@/components/add-transaction-provider";
 import { AddTransactionTrigger } from "@/components/add-transaction-trigger";
 import { UserSwitcher } from "@/components/user-switcher";
 import { getAllUsers, getCurrentUser } from "@/lib/current-user";
@@ -24,7 +25,7 @@ export default async function AppLayout({
     getAllPaymentMethods(),
   ]);
 
-  return (
+  const shell = (
     <div className="flex flex-1 flex-col">
       <header className="border-b">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
@@ -40,14 +41,7 @@ export default async function AppLayout({
             ))}
           </nav>
           <div className="flex items-center gap-3">
-            {currentUser && (
-              <AddTransactionTrigger
-                categories={categories}
-                users={users}
-                paymentMethods={paymentMethods}
-                currentUserId={currentUser.id}
-              />
-            )}
+            {currentUser && <AddTransactionTrigger />}
             <UserSwitcher users={users} currentUserId={currentUser?.id ?? null} />
           </div>
         </div>
@@ -56,5 +50,18 @@ export default async function AppLayout({
         {children}
       </main>
     </div>
+  );
+
+  if (!currentUser) return shell;
+
+  return (
+    <AddTransactionProvider
+      categories={categories}
+      users={users}
+      paymentMethods={paymentMethods}
+      currentUserId={currentUser.id}
+    >
+      {shell}
+    </AddTransactionProvider>
   );
 }
