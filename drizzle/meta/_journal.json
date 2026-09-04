@@ -8,6 +8,13 @@
       "when": 1788353309991,
       "tag": "0000_yellow_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788527399693,
+      "tag": "0001_narrow_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

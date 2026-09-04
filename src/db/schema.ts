@@ -77,6 +77,7 @@ export const transactions = pgTable(
     paymentMethodId: uuid("payment_method_id").references(
       () => paymentMethods.id,
     ),
+    goalId: uuid("goal_id").references(() => goals.id),
     note: text("note"),
     importBatchId: uuid("import_batch_id").references(() => importBatches.id),
     fingerprint: text("fingerprint").unique(),
