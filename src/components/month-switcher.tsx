@@ -44,10 +44,10 @@ export function MonthSwitcher({ month }: { month: string }) {
   const next = shiftMonth(month, 1);
 
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex items-center justify-center gap-2">
       <Button
-        variant="ghost"
-        size="icon-sm"
+        variant="outline"
+        className="size-8 rounded-[9px] border-none bg-card p-0"
         nativeButton={false}
         render={<Link href={`/?month=${prev}`} />}
       >
@@ -107,8 +107,8 @@ export function MonthSwitcher({ month }: { month: string }) {
       </Popover>
 
       <Button
-        variant="ghost"
-        size="icon-sm"
+        variant="outline"
+        className="size-8 rounded-[9px] border-none bg-card p-0"
         nativeButton={false}
         render={<Link href={`/?month=${next}`} />}
       >

@@ -4,8 +4,8 @@ const CURRENCY = process.env.APP_CURRENCY || "€";
 const LOCALE = process.env.APP_LOCALE || "ru-RU";
 
 const numberFormatter = new Intl.NumberFormat(LOCALE, {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
 });
 
 export function formatMoney(amount: number | string): string {

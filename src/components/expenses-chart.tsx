@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ReferenceLine,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Area, AreaChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
+import type { DotItemDotProps } from "recharts";
 
 import {
   ChartContainer,
@@ -19,15 +12,20 @@ import {
 import type { DailyExpense } from "@/lib/queries/dashboard";
 
 const chartConfig = {
-  amount: {
-    label: "Расходы за день",
-    color: "var(--chart-1)",
-  },
   cumulative: {
     label: "Накопительный итог",
-    color: "var(--chart-2)",
+    color: "var(--chart-1)",
+  },
+  plan: {
+    label: "План",
+    color: "var(--muted-foreground)",
   },
 } satisfies ChartConfig;
+
+function formatThousands(value: number): string {
+  if (Math.abs(value) < 1000) return String(value);
+  return `${Math.round(value / 1000)}к`;
+}
 
 export function ExpensesChart({
   data,
@@ -36,30 +34,86 @@ export function ExpensesChart({
   data: DailyExpense[];
   monthlyLimit: number;
 }) {
+  const daysInMonth = data.length;
+  const chartData = data.map((point) => ({
+    ...point,
+    plan: monthlyLimit > 0 ? (monthlyLimit * point.day) / daysInMonth : undefined,
+  }));
+
   return (
-    <ChartContainer config={chartConfig} className="aspect-auto h-64 w-full">
-      <ComposedChart data={data} margin={{ left: -20 }}>
-        <CartesianGrid vertical={false} />
-        <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={12} />
-        <YAxis tickLine={false} axisLine={false} fontSize={12} width={60} />
+    <ChartContainer config={chartConfig} className="aspect-auto h-60 w-full">
+      <AreaChart data={chartData} margin={{ top: 16, left: 8, right: 8 }}>
+        <defs>
+          <linearGradient id="fillCumulative" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.2} />
+            <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid vertical={false} stroke="var(--border)" />
+        <XAxis
+          dataKey="day"
+          tickLine={false}
+          axisLine={false}
+          fontSize={12}
+          interval={4}
+        />
+        <YAxis
+          tickLine={false}
+          axisLine={false}
+          fontSize={12}
+          width={40}
+          tickFormatter={formatThousands}
+        />
         <ChartTooltip
           content={<ChartTooltipContent labelFormatter={(day) => `День ${day}`} />}
         />
-        <Bar dataKey="amount" fill="var(--color-amount)" radius={2} />
-        <Line
-          dataKey="cumulative"
-          stroke="var(--color-cumulative)"
-          strokeWidth={2}
-          dot={false}
-        />
         {monthlyLimit > 0 && (
-          <ReferenceLine
-            y={monthlyLimit}
-            stroke="var(--destructive)"
-            strokeDasharray="4 4"
+          <Line
+            dataKey="plan"
+            stroke="var(--color-plan)"
+            strokeWidth={1.5}
+            strokeDasharray="5 5"
+            type="monotone"
+            dot={(props: DotItemDotProps) => {
+              if (props.index !== chartData.length - 1) return <g key={props.index} />;
+              return (
+                <text
+                  key={props.index}
+                  x={props.cx}
+                  y={(props.cy ?? 0) - 10}
+                  textAnchor="end"
+                  fontSize={12}
+                  fill="var(--color-plan)"
+                >
+                  план
+                </text>
+              );
+            }}
+            activeDot={false}
           />
         )}
-      </ComposedChart>
+        <Area
+          dataKey="cumulative"
+          stroke="var(--color-cumulative)"
+          strokeWidth={2.5}
+          type="monotone"
+          fill="url(#fillCumulative)"
+          dot={(props: DotItemDotProps) => {
+            if (props.index !== data.length - 1) return <g key={props.index} />;
+            return (
+              <circle
+                key={props.index}
+                cx={props.cx}
+                cy={props.cy}
+                r={4}
+                fill="var(--color-cumulative)"
+                stroke="var(--card)"
+                strokeWidth={2}
+              />
+            );
+          }}
+        />
+      </AreaChart>
     </ChartContainer>
   );
 }
