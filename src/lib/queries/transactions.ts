@@ -62,6 +62,7 @@ export async function getHistoryRows(filters: HistoryFilters, page: number) {
       paidByName: users.displayName,
       paymentMethodId: transactions.paymentMethodId,
       paymentMethodName: paymentMethods.name,
+      goalId: transactions.goalId,
     })
     .from(transactions)
     .innerJoin(categories, eq(transactions.categoryId, categories.id))

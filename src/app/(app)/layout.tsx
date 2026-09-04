@@ -1,54 +1,43 @@
-import Link from "next/link";
-
 import { AddTransactionProvider } from "@/components/add-transaction-provider";
 import { AddTransactionTrigger } from "@/components/add-transaction-trigger";
+import { DashboardNav } from "@/components/dashboard-nav";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { UserSwitcher } from "@/components/user-switcher";
 import { getAllUsers, getCurrentUser } from "@/lib/current-user";
 import { getAllPaymentMethods, getCategoriesByKind } from "@/lib/queries/categories";
-
-const NAV_ITEMS = [
-  { href: "/", label: "Дашборд" },
-  { href: "/history", label: "История" },
-  { href: "/goals", label: "Цели" },
-  { href: "/settings", label: "Настройки" },
-];
+import { getGoals } from "@/lib/queries/goals";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [users, currentUser, categories, paymentMethods] = await Promise.all([
+  const [users, currentUser, categories, paymentMethods, goals] = await Promise.all([
     getAllUsers(),
     getCurrentUser(),
     getCategoriesByKind(),
     getAllPaymentMethods(),
+    getGoals(),
   ]);
 
   const shell = (
-    <div className="flex flex-1 flex-col">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-          <nav className="flex items-center gap-4 text-sm font-medium">
-            {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+    <div className="flex flex-1 flex-col bg-muted">
+      <header className="sticky top-0 z-30 h-16 border-b border-border bg-card">
+        <div className="mx-auto flex h-full max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex items-center gap-6">
+            <span className="font-heading text-base font-semibold">Бюджет</span>
+            <DashboardNav />
+          </div>
           <div className="flex items-center gap-3">
             {currentUser && <AddTransactionTrigger />}
             <UserSwitcher users={users} currentUserId={currentUser?.id ?? null} />
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-4 pb-24 sm:px-6 sm:py-6 sm:pb-6">
         {children}
       </main>
+      <MobileBottomNav showAddButton={!!currentUser} />
     </div>
   );
 
@@ -59,6 +48,7 @@ export default async function AppLayout({
       categories={categories}
       users={users}
       paymentMethods={paymentMethods}
+      goals={goals}
       currentUserId={currentUser.id}
     >
       {shell}

@@ -11,6 +11,7 @@ export const transactionSchema = z.object({
   scope: z.enum(["shared", "personal"]),
   paidByUserId: z.uuid({ error: "Выберите, кто платил." }),
   paymentMethodId: z.uuid().nullable(),
+  goalId: z.uuid().nullable(),
   note: z.string().max(500, { error: "Слишком длинный комментарий." }),
 });
 

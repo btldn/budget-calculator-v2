@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { CalendarIcon } from "lucide-react";
 
@@ -36,6 +36,8 @@ import {
 } from "@/lib/validations/transaction";
 
 const NO_PAYMENT_METHOD = "none";
+const NO_GOAL = "none";
+const PRIMARY_CATEGORY_COUNT = 6;
 
 function formatDateLabel(isoDate: string): string {
   if (!isoDate) return "Выберите дату";
@@ -54,6 +56,12 @@ function toIsoDate(date: Date): string {
 
 export type UserOption = { id: string; displayName: string };
 export type PaymentMethodOption = { id: string; name: string };
+export type GoalOption = {
+  id: string;
+  title: string;
+  targetAmount: string;
+  savedAmount: string;
+};
 
 export function TransactionForm<TData = undefined>({
   mode,
@@ -61,6 +69,7 @@ export function TransactionForm<TData = undefined>({
   categories,
   users,
   paymentMethods,
+  goals,
   onSubmit,
   onSuccess,
 }: {
@@ -69,6 +78,7 @@ export function TransactionForm<TData = undefined>({
   categories: { expense: CategoryOption[]; income: CategoryOption[] };
   users: UserOption[];
   paymentMethods: PaymentMethodOption[];
+  goals: GoalOption[];
   onSubmit: (values: TransactionFormValues) => Promise<ActionResult<TData>>;
   onSuccess?: (result: ActionResult<TData>) => void;
 }) {
@@ -77,6 +87,7 @@ export function TransactionForm<TData = undefined>({
     defaultValues,
   });
   const [isPending, startTransition] = useTransition();
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   const kind = form.watch("kind");
   const categoryId = form.watch("categoryId");
@@ -84,7 +95,20 @@ export function TransactionForm<TData = undefined>({
   const paidByUserId = form.watch("paidByUserId");
   const occurredOn = form.watch("occurredOn");
   const paymentMethodId = form.watch("paymentMethodId");
+  const goalId = form.watch("goalId");
   const activeCategories = kind === "expense" ? categories.expense : categories.income;
+  const primaryCategories = activeCategories.slice(0, PRIMARY_CATEGORY_COUNT);
+  const restCategories = activeCategories.slice(PRIMARY_CATEGORY_COUNT);
+  const isSelectedInRest = restCategories.some((c) => c.id === categoryId);
+  const visibleCategories = showAllCategories || isSelectedInRest
+    ? activeCategories
+    : primaryCategories;
+
+  function handleEnterSubmit(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void form.handleSubmit(handleSubmit)();
+  }
 
   function handleSubmit(values: TransactionFormValues) {
     startTransition(async () => {
@@ -100,8 +124,10 @@ export function TransactionForm<TData = undefined>({
           ...values,
           amount: 0,
           categoryId: "",
+          goalId: null,
           note: "",
         });
+        setShowAllCategories(false);
       }
     });
   }
@@ -127,9 +153,10 @@ export function TransactionForm<TData = undefined>({
             type="button"
             size="sm"
             variant={kind === "income" ? "secondary" : "ghost"}
-            onClick={() =>
-              form.setValue("kind", "income", { shouldValidate: true })
-            }
+            onClick={() => {
+              form.setValue("kind", "income", { shouldValidate: true });
+              form.setValue("goalId", null);
+            }}
           >
             Доход
           </Button>
@@ -145,6 +172,7 @@ export function TransactionForm<TData = undefined>({
             autoFocus
             placeholder="0"
             onFocus={(event) => event.target.select()}
+            onKeyDown={handleEnterSubmit}
             {...form.register("amount")}
           />
           <FieldError errors={[form.formState.errors.amount]} />
@@ -153,7 +181,7 @@ export function TransactionForm<TData = undefined>({
         <Field data-invalid={!!form.formState.errors.categoryId}>
           <FieldLabel>Категория</FieldLabel>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {activeCategories.map((category) => (
+            {visibleCategories.map((category) => (
               <Button
                 key={category.id}
                 type="button"
@@ -174,6 +202,19 @@ export function TransactionForm<TData = undefined>({
               </Button>
             ))}
           </div>
+          {restCategories.length > 0 && !isSelectedInRest && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowAllCategories((prev) => !prev)}
+            >
+              {showAllCategories
+                ? "Свернуть"
+                : `Ещё ${restCategories.length}`}
+            </Button>
+          )}
           <FieldError errors={[form.formState.errors.categoryId]} />
         </Field>
 
@@ -277,9 +318,50 @@ export function TransactionForm<TData = undefined>({
           </Select>
         </Field>
 
+        {kind === "expense" && goals.length > 0 && (
+          <Field>
+            <FieldLabel>Цель</FieldLabel>
+            <Select
+              items={{
+                [NO_GOAL]: "Без цели",
+                ...Object.fromEntries(goals.map((g) => [g.id, g.title])),
+              }}
+              value={goalId ?? NO_GOAL}
+              onValueChange={(value) =>
+                form.setValue(
+                  "goalId",
+                  value === NO_GOAL ? null : (value as string),
+                )
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Без цели" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_GOAL}>Без цели</SelectItem>
+                {goals.map((goal) => {
+                  const percent = Number(goal.targetAmount) > 0
+                    ? Math.min(100, Math.round((Number(goal.savedAmount) / Number(goal.targetAmount)) * 100))
+                    : 0;
+                  return (
+                    <SelectItem key={goal.id} value={goal.id}>
+                      {goal.title} ({percent}%)
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+
         <Field>
           <FieldLabel htmlFor="note">Комментарий</FieldLabel>
-          <Input id="note" placeholder="Необязательно" {...form.register("note")} />
+          <Input
+            id="note"
+            placeholder="Необязательно"
+            onKeyDown={handleEnterSubmit}
+            {...form.register("note")}
+          />
         </Field>
 
         {form.formState.errors.root && (

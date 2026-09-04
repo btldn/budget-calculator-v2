@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   TransactionForm,
+  type GoalOption,
   type PaymentMethodOption,
   type UserOption,
 } from "@/components/transaction-form";
@@ -35,6 +36,7 @@ type EditableTransaction = {
   scope: "shared" | "personal";
   paidByUserId: string;
   paymentMethodId: string | null;
+  goalId: string | null;
   note: string | null;
 };
 
@@ -43,11 +45,13 @@ export function TransactionRowActions({
   categories,
   users,
   paymentMethods,
+  goals,
 }: {
   transaction: EditableTransaction;
   categories: { expense: CategoryOption[]; income: CategoryOption[] };
   users: UserOption[];
   paymentMethods: PaymentMethodOption[];
+  goals: GoalOption[];
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -72,6 +76,7 @@ export function TransactionRowActions({
       categories={categories}
       users={users}
       paymentMethods={paymentMethods}
+      goals={goals}
       defaultValues={{
         kind: transaction.kind,
         amount: Number(transaction.amount),
@@ -80,6 +85,7 @@ export function TransactionRowActions({
         scope: transaction.scope,
         paidByUserId: transaction.paidByUserId,
         paymentMethodId: transaction.paymentMethodId,
+        goalId: transaction.goalId,
         note: transaction.note ?? "",
       }}
       onSubmit={(values) => updateTransaction(transaction.id, values)}

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   TransactionForm,
+  type GoalOption,
   type PaymentMethodOption,
   type UserOption,
 } from "@/components/transaction-form";
@@ -47,12 +48,14 @@ export function AddTransactionProvider({
   categories,
   users,
   paymentMethods,
+  goals,
   currentUserId,
   children,
 }: {
   categories: { expense: CategoryOption[]; income: CategoryOption[] };
   users: UserOption[];
   paymentMethods: PaymentMethodOption[];
+  goals: GoalOption[];
   currentUserId: string;
   children: React.ReactNode;
 }) {
@@ -65,6 +68,7 @@ export function AddTransactionProvider({
       categories={categories}
       users={users}
       paymentMethods={paymentMethods}
+      goals={goals}
       defaultValues={{
         kind: "expense",
         amount: 0,
@@ -73,12 +77,14 @@ export function AddTransactionProvider({
         scope: "shared",
         paidByUserId: currentUserId,
         paymentMethodId: null,
+        goalId: null,
         note: "",
       }}
       onSubmit={createTransaction}
       onSuccess={(result) => {
         if (!result.success) return;
         const id = result.data.id;
+        setOpen(false);
         toast.success("Трата сохранена", {
           action: {
             label: "Отменить",

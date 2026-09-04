@@ -20,6 +20,7 @@ import {
   getAllPaymentMethods,
   getCategoriesByKind,
 } from "@/lib/queries/categories";
+import { getGoals } from "@/lib/queries/goals";
 import { getHistoryRows, type HistoryFilters as Filters } from "@/lib/queries/transactions";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -77,13 +78,14 @@ export default async function HistoryPage({
   const filters = parseFilters(sp);
   const page = Math.max(1, Number(first(sp.page)) || 1);
 
-  const [{ rows, pageCount, expenseTotal, incomeTotal }, categories, users, paymentMethods, categoriesByKind] =
+  const [{ rows, pageCount, expenseTotal, incomeTotal }, categories, users, paymentMethods, categoriesByKind, goals] =
     await Promise.all([
       getHistoryRows(filters, page),
       getAllCategories(),
       getAllUsers(),
       getAllPaymentMethods(),
       getCategoriesByKind(),
+      getGoals(),
     ]);
 
   const exportHref = `/history/export?${buildQueryString(sp, { page: null })}`;
@@ -114,7 +116,7 @@ export default async function HistoryPage({
           По этому фильтру ничего не найдено.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -130,10 +132,10 @@ export default async function HistoryPage({
                   </Link>
                 </TableHead>
                 <TableHead>Категория</TableHead>
-                <TableHead>Комментарий</TableHead>
-                <TableHead>Кто платил</TableHead>
-                <TableHead>Чьё</TableHead>
-                <TableHead>Способ</TableHead>
+                <TableHead className="hidden sm:table-cell">Комментарий</TableHead>
+                <TableHead className="hidden sm:table-cell">Кто платил</TableHead>
+                <TableHead className="hidden sm:table-cell">Чьё</TableHead>
+                <TableHead className="hidden sm:table-cell">Способ</TableHead>
                 <TableHead className="text-right">
                   <Link
                     href={sortHeaderHref(sp, "amount")}
@@ -166,16 +168,16 @@ export default async function HistoryPage({
                       {row.categoryName}
                     </span>
                   </TableCell>
-                  <TableCell className="max-w-48 truncate text-muted-foreground">
+                  <TableCell className="hidden max-w-48 truncate text-muted-foreground sm:table-cell">
                     {row.note}
                   </TableCell>
-                  <TableCell>{row.paidByName}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">{row.paidByName}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge variant="outline">
                       {row.scope === "shared" ? "Общее" : "Личное"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="hidden text-muted-foreground sm:table-cell">
                     {row.paymentMethodName ?? "—"}
                   </TableCell>
                   <TableCell
@@ -192,6 +194,7 @@ export default async function HistoryPage({
                       categories={categoriesByKind}
                       users={users}
                       paymentMethods={paymentMethods}
+                      goals={goals}
                     />
                   </TableCell>
                 </TableRow>

@@ -9,19 +9,12 @@ export function AddTransactionTrigger() {
   const { open } = useAddTransactionDialog();
 
   return (
-    <>
-      <Button size="sm" className="hidden sm:inline-flex" onClick={open}>
-        <PlusIcon />
-        Добавить трату
-      </Button>
-      <Button
-        size="icon-lg"
-        className="fixed right-4 bottom-4 z-40 rounded-full shadow-lg sm:hidden"
-        onClick={open}
-      >
-        <PlusIcon />
-        <span className="sr-only">Добавить трату</span>
-      </Button>
-    </>
+    <Button
+      className="hidden h-9 rounded-xl px-5 font-semibold sm:inline-flex"
+      onClick={open}
+    >
+      <PlusIcon />
+      Добавить трату
+    </Button>
   );
 }
