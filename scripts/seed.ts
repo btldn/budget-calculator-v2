@@ -23,6 +23,14 @@ const EXPENSE_CATEGORIES = [
   "Прочие расходы",
 ];
 
+const DEFAULT_MONTHLY_LIMITS: Record<string, string> = {
+  "Жильё / аренда": "25000",
+  "Продукты": "30000",
+  "Кафе и рестораны": "12000",
+  "Транспорт": "12000",
+  "Развлечения": "15000",
+};
+
 const INCOME_CATEGORIES = [
   "Зарплата",
   "Фриланс / подработка",
@@ -96,6 +104,7 @@ async function seedCategories() {
     ...row,
     color: CATEGORY_COLORS[colorIndex++ % CATEGORY_COLORS.length],
     sortOrder: sortOrder++,
+    monthlyLimit: DEFAULT_MONTHLY_LIMITS[row.name] ?? null,
   }));
 
   await db.insert(categories).values(rows);

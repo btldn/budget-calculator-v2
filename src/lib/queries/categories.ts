@@ -76,3 +76,23 @@ export async function getAllPaymentMethods() {
     .where(isNull(paymentMethods.archivedAt))
     .orderBy(asc(paymentMethods.name));
 }
+
+export async function getCategoriesForSettings() {
+  const rows = await db.select().from(categories).orderBy(asc(categories.sortOrder));
+
+  const split = (kind: "expense" | "income") => ({
+    active: rows.filter((c) => c.kind === kind && !c.archivedAt),
+    archived: rows.filter((c) => c.kind === kind && c.archivedAt),
+  });
+
+  return { expense: split("expense"), income: split("income") };
+}
+
+export async function getPaymentMethodsForSettings() {
+  const rows = await db.select().from(paymentMethods).orderBy(asc(paymentMethods.name));
+
+  return {
+    active: rows.filter((m) => !m.archivedAt),
+    archived: rows.filter((m) => m.archivedAt),
+  };
+}
