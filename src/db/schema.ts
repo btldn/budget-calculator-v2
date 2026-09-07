@@ -18,7 +18,7 @@ export const transactionScope = pgEnum("transaction_scope", [
   "shared",
   "personal",
 ]);
-export const importSource = pgEnum("import_source", ["csv", "txt"]);
+export const importSource = pgEnum("import_source", ["csv", "txt", "xlsx"]);
 export const ruleMatchType = pgEnum("rule_match_type", ["contains", "regex"]);
 
 export const users = pgTable("users", {

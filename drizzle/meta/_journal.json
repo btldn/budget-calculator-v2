@@ -15,6 +15,13 @@
       "when": 1788527399693,
       "tag": "0001_narrow_living_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788781828845,
+      "tag": "0002_solid_lily_hollister",
+      "breakpoints": true
     }
   ]
 }
