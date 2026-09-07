@@ -1,5 +1,5 @@
 import { db } from "../src/db";
-import { categories, paymentMethods, users } from "../src/db/schema";
+import { categories, categoryRules, paymentMethods, users } from "../src/db/schema";
 
 const EXPENSE_CATEGORIES = [
   "Жильё / аренда",
@@ -61,6 +61,20 @@ const CATEGORY_COLORS = [
   "#ec4899",
   "#f43f5e",
 ];
+
+// Мерчанты, реально встреченные в выписке. Правила матчатся по нормализованному
+// имени мерчанта (см. src/lib/import/normalize.ts), поэтому здесь короткие ключи.
+const STARTER_RULES: Record<string, string[]> = {
+  "Продукты": ["SPAR", "PYATEROCHKA", "MAGNIT", "PEREKRESTOK", "DIXY", "LENTA", "VV_"],
+  // METRO TPP и AVTORIZACIJA — это метро и автобус, а не гипермаркет: суммы
+  // 65 и 61 рубль повторяются по нескольку раз в день.
+  "Транспорт": ["METRO TPP", "AVTORIZACIJA", "PITERAVTO", "YANDEX GO", "TAXI"],
+  "Кафе и рестораны": ["BENUAR", "COFFEE", "GRADUSY VSEGO MIRA", "KOFE", "BAR"],
+  "Красота и уход": ["RIVE GAUCHE", "LETOILE"],
+  "Одежда и обувь": ["LC WAIKIKI", "UNIQLO", "ZARA"],
+  "Развлечения": ["BUKVOED", "KINO"],
+  "Здоровье и аптека": ["APTEKA", "PHARMA"],
+};
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -127,10 +141,41 @@ async function seedPaymentMethods() {
   console.log(`Создано способов оплаты: ${PAYMENT_METHODS.length}`);
 }
 
+async function seedCategoryRules() {
+  const existing = await db.select({ id: categoryRules.id }).from(categoryRules).limit(1);
+  if (existing.length > 0) {
+    console.log("Правила категоризации уже есть, пропускаю.");
+    return;
+  }
+
+  const rows = await db.select().from(categories);
+  const idByName = new Map(rows.map((category) => [category.name, category.id]));
+
+  const values = Object.entries(STARTER_RULES).flatMap(([categoryName, patterns]) => {
+    const categoryId = idByName.get(categoryName);
+    if (!categoryId) {
+      console.warn(`Нет категории «${categoryName}», её правила пропущены.`);
+      return [];
+    }
+    return patterns.map((pattern) => ({
+      matchType: "contains" as const,
+      pattern,
+      categoryId,
+      priority: 0,
+    }));
+  });
+
+  if (values.length === 0) return;
+
+  await db.insert(categoryRules).values(values);
+  console.log(`Создано правил категоризации: ${values.length}`);
+}
+
 async function main() {
   await seedUsers();
   await seedCategories();
   await seedPaymentMethods();
+  await seedCategoryRules();
   console.log("Сидирование завершено.");
   process.exit(0);
 }
