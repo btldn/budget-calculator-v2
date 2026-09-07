@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Дашборд" },
   { href: "/history", label: "История" },
   { href: "/goals", label: "Цели" },
+  { href: "/import", label: "Импорт" },
   { href: "/settings", label: "Настройки" },
 ];
 

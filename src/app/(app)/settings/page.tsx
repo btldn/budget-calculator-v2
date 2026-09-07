@@ -1,15 +1,21 @@
+import Link from "next/link";
+
 import { CategorySettingsList } from "@/components/category-settings-list";
+import { ImportBatchList } from "@/components/import-batch-list";
 import { Card, CardContent } from "@/components/ui/card";
 import { PaymentMethodSettingsList } from "@/components/payment-method-settings-list";
+import { Button } from "@/components/ui/button";
 import {
   getCategoriesForSettings,
   getPaymentMethodsForSettings,
 } from "@/lib/queries/categories";
+import { getImportBatches } from "@/lib/queries/import";
 
 export default async function SettingsPage() {
-  const [categories, paymentMethods] = await Promise.all([
+  const [categories, paymentMethods, importBatches] = await Promise.all([
     getCategoriesForSettings(),
     getPaymentMethodsForSettings(),
+    getImportBatches(),
   ]);
 
   return (
@@ -45,6 +51,28 @@ export default async function SettingsPage() {
             active={paymentMethods.active}
             archived={paymentMethods.archived}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-medium">История импортов</h2>
+              <p className="text-sm text-muted-foreground">
+                Загруженную выписку можно откатить целиком — вместе со всеми её операциями.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/import" />}
+            >
+              Импортировать выписку
+            </Button>
+          </div>
+          <ImportBatchList batches={importBatches} />
         </CardContent>
       </Card>
     </div>

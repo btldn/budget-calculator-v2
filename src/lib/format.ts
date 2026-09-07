@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { MoneyFormat } from "@/lib/format-client";
+
 const CURRENCY = process.env.APP_CURRENCY || "€";
 const LOCALE = process.env.APP_LOCALE || "ru-RU";
 
@@ -28,4 +30,9 @@ const dateFormatter = new Intl.DateTimeFormat(LOCALE, {
 export function formatDate(isoDate: string): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   return dateFormatter.format(new Date(year, month - 1, day));
+}
+
+/** Валюта и локаль для клиентских компонентов — env-переменные в браузер не уезжают. */
+export function moneyFormat(): MoneyFormat {
+  return { currency: CURRENCY, locale: LOCALE };
 }
