@@ -5,6 +5,7 @@ import { ImportBatchList } from "@/components/import-batch-list";
 import { Card, CardContent } from "@/components/ui/card";
 import { PaymentMethodSettingsList } from "@/components/payment-method-settings-list";
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/current-user";
 import {
   getCategoriesForSettings,
   getPaymentMethodsForSettings,
@@ -12,8 +13,10 @@ import {
 import { getImportBatches } from "@/lib/queries/import";
 
 export default async function SettingsPage() {
+  const currentUser = await getCurrentUser();
+
   const [categories, paymentMethods, importBatches] = await Promise.all([
-    getCategoriesForSettings(),
+    getCategoriesForSettings(currentUser?.id ?? ""),
     getPaymentMethodsForSettings(),
     getImportBatches(),
   ]);
@@ -24,8 +27,20 @@ export default async function SettingsPage() {
 
       <Card>
         <CardContent>
-          <h2 className="mb-4 font-medium">Категории расходов</h2>
+          <div className="mb-4">
+            <h2 className="font-medium">Категории расходов</h2>
+            {currentUser && (
+              <p className="text-sm text-muted-foreground">
+                Лимиты показаны и редактируются для {currentUser.displayName} —
+                переключите пользователя в шапке, чтобы задать лимиты другого.
+              </p>
+            )}
+          </div>
           <CategorySettingsList
+            // Лимиты в строках — персональные; при смене активного пользователя
+            // список нужно пересоздать, а не просто обновить пропсы, иначе
+            // локальный state полей лимита останется от предыдущего человека.
+            key={currentUser?.id ?? "none"}
             kind="expense"
             active={categories.expense.active}
             archived={categories.expense.archived}

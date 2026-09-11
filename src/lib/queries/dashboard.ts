@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { categories, transactions } from "@/db/schema";
+import { categories, categoryLimits, transactions } from "@/db/schema";
 
 export function getMonthRange(month: string): { start: string; end: string } {
   const [year, m] = month.split("-").map(Number);
@@ -24,8 +24,22 @@ export function getCurrentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export async function getMonthExpenseIncome(month: string) {
+// Условия «операция попадает в месяц и, если задан фильтр, оплачена этим
+// человеком». Возвращает массив, чтобы разворачивать его в and(...) рядом с
+// условиями конкретного запроса; undefined внутри and() игнорируется.
+function monthConditions(month: string, paidByUserId?: string | null) {
   const { start, end } = getMonthRange(month);
+  return [
+    gte(transactions.occurredOn, start),
+    lt(transactions.occurredOn, end),
+    paidByUserId ? eq(transactions.paidByUserId, paidByUserId) : undefined,
+  ];
+}
+
+export async function getMonthExpenseIncome(
+  month: string,
+  paidByUserId?: string | null,
+) {
   const [row] = await db
     .select({
       income: sql<string>`coalesce(sum(${transactions.amount}) filter (where ${transactions.kind} = 'income'), 0)`,
@@ -33,7 +47,7 @@ export async function getMonthExpenseIncome(month: string) {
       transactionCount: sql<number>`count(*)`.mapWith(Number),
     })
     .from(transactions)
-    .where(and(gte(transactions.occurredOn, start), lt(transactions.occurredOn, end)));
+    .where(and(...monthConditions(month, paidByUserId)));
 
   return row;
 }
@@ -47,10 +61,30 @@ export type CategoryProgress = {
   percent: number | null;
 };
 
-export async function getCategoryProgress(month: string): Promise<CategoryProgress[]> {
-  const { start, end } = getMonthRange(month);
+// Без фильтра лимит категории — это её общий лимит семьи ("общий") плюс все
+// персональные лимиты (так существующие данные, ставшие "общими" строками,
+// продолжают работать как раньше). С фильтром по человеку — только его
+// персональная строка; нет строки — лимита нет, к общему не откатываемся.
+function categoryLimitRows(paidByUserId?: string | null) {
+  return paidByUserId
+    ? db
+        .select({ categoryId: categoryLimits.categoryId, total: categoryLimits.monthlyLimit })
+        .from(categoryLimits)
+        .where(eq(categoryLimits.userId, paidByUserId))
+    : db
+        .select({
+          categoryId: categoryLimits.categoryId,
+          total: sql<string>`sum(${categoryLimits.monthlyLimit})`,
+        })
+        .from(categoryLimits)
+        .groupBy(categoryLimits.categoryId);
+}
 
-  const [cats, spentRows] = await Promise.all([
+export async function getCategoryProgress(
+  month: string,
+  paidByUserId?: string | null,
+): Promise<CategoryProgress[]> {
+  const [cats, spentRows, limitRows] = await Promise.all([
     db
       .select()
       .from(categories)
@@ -65,25 +99,27 @@ export async function getCategoryProgress(month: string): Promise<CategoryProgre
       .where(
         and(
           eq(transactions.kind, "expense"),
-          gte(transactions.occurredOn, start),
-          lt(transactions.occurredOn, end),
+          ...monthConditions(month, paidByUserId),
         ),
       )
       .groupBy(transactions.categoryId),
+    categoryLimitRows(paidByUserId),
   ]);
 
   const spentMap = new Map(spentRows.map((row) => [row.categoryId, row.total]));
+  const limitMap = new Map(limitRows.map((row) => [row.categoryId, row.total]));
 
   const rows: CategoryProgress[] = cats.map((category) => {
     const spent = spentMap.get(category.id) ?? "0";
-    const percent = category.monthlyLimit
-      ? (Number(spent) / Number(category.monthlyLimit)) * 100
+    const monthlyLimit = limitMap.get(category.id) ?? null;
+    const percent = monthlyLimit
+      ? (Number(spent) / Number(monthlyLimit)) * 100
       : null;
     return {
       id: category.id,
       name: category.name,
       color: category.color,
-      monthlyLimit: category.monthlyLimit,
+      monthlyLimit,
       spent,
       percent,
     };
@@ -99,9 +135,10 @@ export async function getCategoryProgress(month: string): Promise<CategoryProgre
 
 export type DailyExpense = { day: number; amount: number; cumulative: number };
 
-export async function getDailyExpenses(month: string): Promise<DailyExpense[]> {
-  const { start, end } = getMonthRange(month);
-
+export async function getDailyExpenses(
+  month: string,
+  paidByUserId?: string | null,
+): Promise<DailyExpense[]> {
   const rows = await db
     .select({
       day: transactions.occurredOn,
@@ -111,8 +148,7 @@ export async function getDailyExpenses(month: string): Promise<DailyExpense[]> {
     .where(
       and(
         eq(transactions.kind, "expense"),
-        gte(transactions.occurredOn, start),
-        lt(transactions.occurredOn, end),
+        ...monthConditions(month, paidByUserId),
       ),
     )
     .groupBy(transactions.occurredOn);
@@ -134,13 +170,20 @@ export async function getDailyExpenses(month: string): Promise<DailyExpense[]> {
   return result;
 }
 
-export async function getMonthlyExpenseLimit(): Promise<number> {
+export async function getMonthlyExpenseLimit(paidByUserId?: string | null): Promise<number> {
   const [row] = await db
     .select({
-      total: sql<string>`coalesce(sum(${categories.monthlyLimit}), 0)`,
+      total: sql<string>`coalesce(sum(${categoryLimits.monthlyLimit}), 0)`,
     })
-    .from(categories)
-    .where(and(eq(categories.kind, "expense"), isNull(categories.archivedAt)));
+    .from(categoryLimits)
+    .innerJoin(categories, eq(categoryLimits.categoryId, categories.id))
+    .where(
+      and(
+        eq(categories.kind, "expense"),
+        isNull(categories.archivedAt),
+        paidByUserId ? eq(categoryLimits.userId, paidByUserId) : undefined,
+      ),
+    );
 
   return Number(row.total);
 }

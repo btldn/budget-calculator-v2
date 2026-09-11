@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -33,11 +34,32 @@ export const categories = pgTable("categories", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   kind: transactionKind("kind").notNull(),
-  monthlyLimit: numeric("monthly_limit", { precision: 12, scale: 2 }),
   color: text("color").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
 });
+
+// Персональный лимит категории на месяц — у каждого человека своя строка.
+// Лимит категории для всей семьи = сумма лимитов всех людей по этой категории.
+export const categoryLimits = pgTable(
+  "category_limits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => categories.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    monthlyLimit: numeric("monthly_limit", { precision: 12, scale: 2 }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("category_limits_category_user_idx").on(
+      table.categoryId,
+      table.userId,
+    ),
+  ],
+);
 
 export const paymentMethods = pgTable("payment_methods", {
   id: uuid("id").primaryKey().defaultRandom(),

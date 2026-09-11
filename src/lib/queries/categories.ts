@@ -1,9 +1,9 @@
 import "server-only";
 
-import { asc, gte, isNull, sql } from "drizzle-orm";
+import { asc, eq, gte, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { categories, paymentMethods, transactions } from "@/db/schema";
+import { categories, categoryLimits, paymentMethods, transactions } from "@/db/schema";
 
 export type CategoryOption = {
   id: string;
@@ -77,12 +77,45 @@ export async function getAllPaymentMethods() {
     .orderBy(asc(paymentMethods.name));
 }
 
-export async function getCategoriesForSettings() {
-  const rows = await db.select().from(categories).orderBy(asc(categories.sortOrder));
+export type SettingsCategory = {
+  id: string;
+  name: string;
+  color: string;
+  kind: "expense" | "income";
+  archivedAt: Date | null;
+  // Лимит именно currentUserId — у каждого человека своя цифра.
+  monthlyLimit: string | null;
+};
+
+export async function getCategoriesForSettings(currentUserId: string): Promise<{
+  expense: { active: SettingsCategory[]; archived: SettingsCategory[] };
+  income: { active: SettingsCategory[]; archived: SettingsCategory[] };
+}> {
+  const [rows, limitRows] = await Promise.all([
+    db.select().from(categories).orderBy(asc(categories.sortOrder)),
+    db
+      .select({
+        categoryId: categoryLimits.categoryId,
+        monthlyLimit: categoryLimits.monthlyLimit,
+      })
+      .from(categoryLimits)
+      .where(eq(categoryLimits.userId, currentUserId)),
+  ]);
+
+  const limitMap = new Map(limitRows.map((row) => [row.categoryId, row.monthlyLimit]));
+
+  const withLimits: SettingsCategory[] = rows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    color: c.color,
+    kind: c.kind,
+    archivedAt: c.archivedAt,
+    monthlyLimit: limitMap.get(c.id) ?? null,
+  }));
 
   const split = (kind: "expense" | "income") => ({
-    active: rows.filter((c) => c.kind === kind && !c.archivedAt),
-    archived: rows.filter((c) => c.kind === kind && c.archivedAt),
+    active: withLimits.filter((c) => c.kind === kind && !c.archivedAt),
+    archived: withLimits.filter((c) => c.kind === kind && c.archivedAt),
   });
 
   return { expense: split("expense"), income: split("income") };

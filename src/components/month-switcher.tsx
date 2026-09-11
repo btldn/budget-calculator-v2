@@ -37,11 +37,22 @@ function monthLabel(month: string): string {
   return `${MONTH_NAMES[m - 1]} ${year}`;
 }
 
-export function MonthSwitcher({ month }: { month: string }) {
+export function MonthSwitcher({
+  month,
+  paidByUserId,
+}: {
+  month: string;
+  paidByUserId?: string | null;
+}) {
   const currentYear = Number(month.split("-")[0]);
   const [pickerYear, setPickerYear] = useState(currentYear);
   const prev = shiftMonth(month, -1);
   const next = shiftMonth(month, 1);
+
+  const hrefFor = (value: string) =>
+    paidByUserId
+      ? `/?month=${value}&paidBy=${paidByUserId}`
+      : `/?month=${value}`;
 
   return (
     <div className="flex items-center justify-center gap-2">
@@ -49,7 +60,7 @@ export function MonthSwitcher({ month }: { month: string }) {
         variant="outline"
         className="size-8 rounded-[9px] border-none bg-card p-0"
         nativeButton={false}
-        render={<Link href={`/?month=${prev}`} />}
+        render={<Link href={hrefFor(prev)} />}
       >
         <ChevronLeftIcon />
       </Button>
@@ -96,7 +107,7 @@ export function MonthSwitcher({ month }: { month: string }) {
                   variant={isActive ? "secondary" : "ghost"}
                   size="sm"
                   nativeButton={false}
-                  render={<Link href={`/?month=${value}`} />}
+                  render={<Link href={hrefFor(value)} />}
                 >
                   {name.slice(0, 3)}
                 </Button>
@@ -110,7 +121,7 @@ export function MonthSwitcher({ month }: { month: string }) {
         variant="outline"
         className="size-8 rounded-[9px] border-none bg-card p-0"
         nativeButton={false}
-        render={<Link href={`/?month=${next}`} />}
+        render={<Link href={hrefFor(next)} />}
       >
         <ChevronRightIcon />
       </Button>

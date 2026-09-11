@@ -74,7 +74,7 @@ export function AddCategoryDialog({ kind }: { kind: "expense" | "income" }) {
 
               {kind === "expense" && (
                 <Field data-invalid={!!form.formState.errors.monthlyLimit}>
-                  <FieldLabel htmlFor="category-limit">Лимит в месяц</FieldLabel>
+                  <FieldLabel htmlFor="category-limit">Мой лимит в месяц</FieldLabel>
                   <Input
                     id="category-limit"
                     type="number"

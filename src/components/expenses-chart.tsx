@@ -30,15 +30,28 @@ function formatThousands(value: number): string {
 export function ExpensesChart({
   data,
   monthlyLimit,
+  currentDay,
 }: {
   data: DailyExpense[];
   monthlyLimit: number;
+  currentDay: number | null;
 }) {
   const daysInMonth = data.length;
   const chartData = data.map((point) => ({
     ...point,
     plan: monthlyLimit > 0 ? (monthlyLimit * point.day) / daysInMonth : undefined,
+    cumulative:
+      currentDay !== null && point.day > currentDay ? null : point.cumulative,
   }));
+  const lastActualIndex =
+    (currentDay !== null ? Math.min(currentDay, daysInMonth) : daysInMonth) - 1;
+
+  const xAxisTicks = Array.from(
+    new Set([
+      ...Array.from({ length: Math.ceil(daysInMonth / 5) }, (_, i) => i * 5 + 1),
+      ...(currentDay !== null ? [currentDay] : []),
+    ]),
+  ).sort((a, b) => a - b);
 
   return (
     <ChartContainer config={chartConfig} className="aspect-auto h-60 w-full">
@@ -55,7 +68,8 @@ export function ExpensesChart({
           tickLine={false}
           axisLine={false}
           fontSize={12}
-          interval={4}
+          ticks={xAxisTicks}
+          interval={0}
         />
         <YAxis
           tickLine={false}
@@ -99,7 +113,7 @@ export function ExpensesChart({
           type="monotone"
           fill="url(#fillCumulative)"
           dot={(props: DotItemDotProps) => {
-            if (props.index !== data.length - 1) return <g key={props.index} />;
+            if (props.index !== lastActualIndex) return <g key={props.index} />;
             return (
               <circle
                 key={props.index}

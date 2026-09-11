@@ -1,13 +1,15 @@
-import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
 import Link from "next/link";
 
+import { CategoryProgressList } from "@/components/category-progress-list";
 import { ExpensesChart } from "@/components/expenses-chart";
 import { ExpensesDonut, type DonutSlice } from "@/components/expenses-donut";
 import { MonthSwitcher } from "@/components/month-switcher";
+import { PersonSwitcher } from "@/components/person-switcher";
 import { Card, CardContent } from "@/components/ui/card";
-import { ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { getCategoryEmoji } from "@/lib/category-emoji";
-import { formatMoney } from "@/lib/format";
+import { getAllUsers } from "@/lib/current-user";
+import { formatShortDate } from "@/lib/format-client";
+import { formatMoney, moneyFormat } from "@/lib/format";
 import {
   getCategoryProgress,
   getCurrentMonth,
@@ -72,20 +74,26 @@ function comparisonLabel(diff: number | null, previousMonth: string): string | n
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; paidBy?: string }>;
 }) {
   const sp = await searchParams;
   const month = sp.month ?? getCurrentMonth();
   const previousMonth = getPreviousMonth(month);
+  const currentDay = month === getCurrentMonth() ? new Date().getDate() : null;
+
+  const users = await getAllUsers();
+  const paidByUserId = users.some((user) => user.id === sp.paidBy)
+    ? (sp.paidBy as string)
+    : null;
 
   const [current, previous, categoryProgress, dailyExpenses, monthlyLimit, recent] =
     await Promise.all([
-      getMonthExpenseIncome(month),
-      getMonthExpenseIncome(previousMonth),
-      getCategoryProgress(month),
-      getDailyExpenses(month),
-      getMonthlyExpenseLimit(),
-      getRecentTransactions(RECENT_TRANSACTIONS_LIMIT),
+      getMonthExpenseIncome(month, paidByUserId),
+      getMonthExpenseIncome(previousMonth, paidByUserId),
+      getCategoryProgress(month, paidByUserId),
+      getDailyExpenses(month, paidByUserId),
+      getMonthlyExpenseLimit(paidByUserId),
+      getRecentTransactions(RECENT_TRANSACTIONS_LIMIT, paidByUserId),
     ]);
 
   const income = Number(current.income);
@@ -148,184 +156,158 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-4">
-      <MonthSwitcher month={month} />
+      <div className="flex flex-col items-center gap-2 sm:grid sm:grid-cols-3 sm:items-center">
+        <div className="hidden sm:block" />
+        <MonthSwitcher month={month} paidByUserId={paidByUserId} />
+        {users.length > 1 && (
+          <div className="flex justify-center sm:justify-end">
+            <PersonSwitcher
+              users={users}
+              month={month}
+              paidByUserId={paidByUserId}
+            />
+          </div>
+        )}
+      </div>
 
-      <div className="grid grid-cols-12 gap-4">
-        <Card className="col-span-12">
-          <CardContent>
-            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-              <div className="py-3 first:pt-0 sm:py-0 sm:pr-7">
-                <p className="text-sm text-muted-foreground">Доходы</p>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-[30px]">
-                  {formatMoney(income)}
-                </p>
-                {incomeComparison && (
-                  <p className="text-sm text-muted-foreground">{incomeComparison}</p>
-                )}
-              </div>
-              <div className="py-3 sm:px-7">
-                <p className="text-sm text-muted-foreground">Расходы</p>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-[30px]">
-                  {formatMoney(expense)}
-                </p>
-                {expenseComparison && (
-                  <p className="text-sm text-muted-foreground">{expenseComparison}</p>
-                )}
-              </div>
-              <div className="py-3 last:pb-0 sm:py-0 sm:px-7">
-                <p className="text-sm text-muted-foreground">Остаток</p>
-                <p
-                  className={`text-2xl font-semibold tabular-nums tracking-tight sm:text-[30px] ${
-                    balance >= 0 ? "text-positive" : "text-destructive"
-                  }`}
-                >
-                  {formatMoney(balance)}
-                </p>
-                {savingsRate !== null && (
-                  <p className="text-sm text-muted-foreground">
-                    норма сбережений {Math.round(savingsRate * 100)}%
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-12 lg:col-span-8">
-          <CardContent>
-            <h2 className="mb-4 text-sm font-medium text-muted-foreground">
-              Расходы по дням
-            </h2>
-            <ExpensesChart data={dailyExpenses} monthlyLimit={monthlyLimit} />
-            {planToDate !== null && chartDiff !== null && (
-              <p className="mt-3 text-[13px] text-muted-foreground">
-                Факт {formatMoney(actualToDate)} из плана {formatMoney(planToDate)}{" "}
-                —{" "}
-                {chartDiff <= 0
-                  ? `уложились с запасом ${formatMoney(Math.abs(chartDiff))}`
-                  : `превысили на ${formatMoney(chartDiff)}`}
+      <Card>
+        <CardContent>
+          <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="py-3 first:pt-0 sm:py-0 sm:pr-7">
+              <p className="text-sm text-muted-foreground">Доходы</p>
+              <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-[30px]">
+                {formatMoney(income)}
               </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-12 lg:col-span-4">
-          <CardContent>
-            <h2 className="mb-4 text-sm font-medium text-muted-foreground">
-              Структура расходов
-            </h2>
-            <ExpensesDonut data={donutData} totalLabel={formatMoney(expense)} />
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-12 lg:col-span-8">
-          <CardContent>
-            <h2 className="mb-4 text-sm font-medium text-muted-foreground">
-              Категории: факт против лимита
-            </h2>
-            <div className="space-y-4">
-              {categoryProgress
-                .filter(
-                  (category) =>
-                    category.monthlyLimit !== null || Number(category.spent) > 0,
-                )
-                .map((category) => {
-                  const spent = Number(category.spent);
-                  const limit = category.monthlyLimit
-                    ? Number(category.monthlyLimit)
-                    : null;
-                  const percent = category.percent;
-                  const isOverLimit = percent !== null && percent > 100;
-                  const colorClass = isOverLimit ? "text-destructive" : "text-foreground";
-
-                  return (
-                    <Link
-                      key={category.id}
-                      href={`/history?category=${category.id}`}
-                      className={`block space-y-1.5 ${limit === null ? "mt-2" : ""}`}
-                    >
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-1.5">
-                          <span
-                            className="inline-block size-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: category.color }}
-                          />
-                          {category.name}
-                        </span>
-                        <span className="tabular-nums text-[13px] text-muted-foreground">
-                          <span className={`font-semibold ${colorClass}`}>
-                            {formatMoney(spent)}
-                          </span>
-                          {limit !== null && ` из ${formatMoney(limit)}`}
-                          {percent !== null && ` (${Math.round(percent)}%)`}
-                        </span>
-                      </div>
-                      {limit !== null && (
-                        <ProgressPrimitive.Root value={Math.min(100, percent ?? 0)}>
-                          <ProgressTrack className="h-2">
-                            <ProgressIndicator
-                              className={isOverLimit ? "bg-destructive" : undefined}
-                              style={
-                                isOverLimit ? undefined : { backgroundColor: category.color }
-                              }
-                            />
-                          </ProgressTrack>
-                        </ProgressPrimitive.Root>
-                      )}
-                    </Link>
-                  );
-                })}
+              {incomeComparison && (
+                <p className="text-sm text-muted-foreground">{incomeComparison}</p>
+              )}
             </div>
-          </CardContent>
-        </Card>
+            <div className="py-3 sm:px-7">
+              <p className="text-sm text-muted-foreground">Расходы</p>
+              <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-[30px]">
+                {formatMoney(expense)}
+              </p>
+              {expenseComparison && (
+                <p className="text-sm text-muted-foreground">{expenseComparison}</p>
+              )}
+            </div>
+            <div className="py-3 last:pb-0 sm:py-0 sm:px-7">
+              <p className="text-sm text-muted-foreground">Остаток</p>
+              <p
+                className={`text-2xl font-semibold tabular-nums tracking-tight sm:text-[30px] ${
+                  balance >= 0 ? "text-positive" : "text-destructive"
+                }`}
+              >
+                {formatMoney(balance)}
+              </p>
+              {savingsRate !== null && (
+                <p className="text-sm text-muted-foreground">
+                  норма сбережений {Math.round(savingsRate * 100)}%
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="col-span-12 lg:col-span-4">
-          <CardContent>
-            <h2 className="mb-1 text-sm font-medium text-muted-foreground">
-              Последние операции
-            </h2>
-            {recent.length === 0 ? (
-              <p className="text-muted-foreground">Операций пока нет.</p>
-            ) : (
-              <div className="divide-y divide-border">
-                {recent.map((row) => (
-                  <div key={row.id} className="flex items-center gap-3 py-3 text-sm">
-                    <span
-                      className="flex size-9 shrink-0 items-center justify-center rounded-xl text-base"
-                      style={{
-                        backgroundColor: `color-mix(in srgb, ${row.categoryColor} 22%, white)`,
-                      }}
-                    >
-                      {getCategoryEmoji(row.categoryName)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">
-                        {row.note || row.categoryName}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <Card>
+            <CardContent>
+              <h2 className="mb-4 text-sm font-medium text-muted-foreground">
+                Расходы по дням
+              </h2>
+              <ExpensesChart
+                data={dailyExpenses}
+                monthlyLimit={monthlyLimit}
+                currentDay={currentDay}
+              />
+              {planToDate !== null && chartDiff !== null && (
+                <p className="mt-3 text-[13px] text-muted-foreground">
+                  Факт {formatMoney(actualToDate)} из плана {formatMoney(planToDate)}{" "}
+                  —{" "}
+                  {chartDiff <= 0
+                    ? `уложились с запасом ${formatMoney(Math.abs(chartDiff))}`
+                    : `превысили на ${formatMoney(chartDiff)}`}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <h2 className="mb-4 text-sm font-medium text-muted-foreground">
+                Категории: факт против лимита
+              </h2>
+              <CategoryProgressList
+                categoryProgress={categoryProgress}
+                month={month}
+                paidByUserId={paidByUserId}
+                moneyFormat={moneyFormat()}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex flex-col gap-4 lg:w-[380px] lg:shrink-0 xl:w-[420px]">
+          <Card>
+            <CardContent>
+              <h2 className="mb-4 text-sm font-medium text-muted-foreground">
+                Структура расходов
+              </h2>
+              <ExpensesDonut data={donutData} totalLabel={formatMoney(expense)} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <h2 className="mb-1 text-sm font-medium text-muted-foreground">
+                Последние операции
+              </h2>
+              {recent.length === 0 ? (
+                <p className="text-muted-foreground">Операций пока нет.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {recent.map((row) => (
+                    <div key={row.id} className="flex items-center gap-3 py-3 text-sm">
+                      <span
+                        className="flex size-9 shrink-0 items-center justify-center rounded-xl text-base"
+                        style={{
+                          backgroundColor: `color-mix(in srgb, ${row.categoryColor} 22%, white)`,
+                        }}
+                      >
+                        {getCategoryEmoji(row.categoryName)}
                       </span>
-                      <span className="block truncate text-[12.5px] text-muted-foreground">
-                        {row.categoryName} · {row.paidByName}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">
+                          {row.note || row.categoryName}
+                        </span>
+                        <span className="block truncate text-[12.5px] text-muted-foreground">
+                          {row.categoryName} · {row.paidByName} ·{" "}
+                          {formatShortDate(row.occurredOn)}
+                        </span>
                       </span>
-                    </span>
-                    <span
-                      className={`shrink-0 tabular-nums ${
-                        row.kind === "income" ? "text-positive" : "text-foreground"
-                      }`}
-                    >
-                      {row.kind === "income" ? "+" : "−"}
-                      {formatMoney(row.amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Link
-              href="/history"
-              className="mt-3 block text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
-            >
-              Вся история
-            </Link>
-          </CardContent>
-        </Card>
+                      <span
+                        className={`shrink-0 tabular-nums ${
+                          row.kind === "income" ? "text-positive" : "text-foreground"
+                        }`}
+                      >
+                        {row.kind === "income" ? "+" : "−"}
+                        {formatMoney(row.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Link
+                href="/history"
+                className="mt-3 block text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
+              >
+                Вся история
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

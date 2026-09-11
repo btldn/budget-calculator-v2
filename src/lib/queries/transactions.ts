@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, asc, desc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { categories, paymentMethods, transactions, users } from "@/db/schema";
+import { getMonthRange } from "@/lib/queries/dashboard";
 
 export type HistoryFilters = {
   from?: string;
@@ -121,7 +122,10 @@ export async function getHistoryRowsForExport(filters: HistoryFilters) {
     .orderBy(orderFn(sortColumn), desc(transactions.createdAt));
 }
 
-export async function getRecentTransactions(limit: number) {
+export async function getRecentTransactions(
+  limit: number,
+  paidByUserId?: string | null,
+) {
   return db
     .select({
       id: transactions.id,
@@ -136,6 +140,43 @@ export async function getRecentTransactions(limit: number) {
     .from(transactions)
     .innerJoin(categories, eq(transactions.categoryId, categories.id))
     .innerJoin(users, eq(transactions.paidByUserId, users.id))
+    .where(paidByUserId ? eq(transactions.paidByUserId, paidByUserId) : undefined)
+    .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt))
+    .limit(limit);
+}
+
+// Превью последних операций одной категории за месяц — для разворачиваемой
+// панели под строкой категории на дашборде.
+export async function getCategoryTransactionsPreview(
+  categoryId: string,
+  month: string,
+  paidByUserId?: string | null,
+  limit = 5,
+) {
+  const { start, end } = getMonthRange(month);
+
+  return db
+    .select({
+      id: transactions.id,
+      occurredOn: transactions.occurredOn,
+      kind: transactions.kind,
+      amount: transactions.amount,
+      note: transactions.note,
+      categoryName: categories.name,
+      categoryColor: categories.color,
+      paidByName: users.displayName,
+    })
+    .from(transactions)
+    .innerJoin(categories, eq(transactions.categoryId, categories.id))
+    .innerJoin(users, eq(transactions.paidByUserId, users.id))
+    .where(
+      and(
+        eq(transactions.categoryId, categoryId),
+        gte(transactions.occurredOn, start),
+        lt(transactions.occurredOn, end),
+        paidByUserId ? eq(transactions.paidByUserId, paidByUserId) : undefined,
+      ),
+    )
     .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt))
     .limit(limit);
 }

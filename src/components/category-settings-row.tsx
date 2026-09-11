@@ -6,19 +6,15 @@ import { GripVerticalIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { setCategoryArchived, updateCategory } from "@/app/actions/categories";
+import {
+  setCategoryArchived,
+  setCategoryLimit,
+  updateCategory,
+} from "@/app/actions/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { SettingsCategory } from "@/lib/queries/categories";
 import { cn } from "@/lib/utils";
-
-export type SettingsCategory = {
-  id: string;
-  name: string;
-  color: string;
-  kind: "expense" | "income";
-  monthlyLimit: string | null;
-  archivedAt: Date | null;
-};
 
 export function CategorySettingsRow({ category }: { category: SettingsCategory }) {
   const isArchived = !!category.archivedAt;
@@ -39,31 +35,25 @@ export function CategorySettingsRow({ category }: { category: SettingsCategory }
     transition,
   };
 
-  function saveField(patch: { name?: string; monthlyLimit?: string | null }) {
+  function saveName() {
+    if (name === category.name) return;
     startTransition(async () => {
-      const result = await updateCategory(category.id, {
-        name: patch.name ?? name,
-        color: category.color,
-        monthlyLimit:
-          patch.monthlyLimit !== undefined
-            ? patch.monthlyLimit
-              ? Number(patch.monthlyLimit)
-              : null
-            : limit
-              ? Number(limit)
-              : null,
-      });
+      const result = await updateCategory(category.id, { name, color: category.color });
       if (!result.success) toast.error(result.error);
     });
   }
 
   function saveColor(color: string) {
     startTransition(async () => {
-      const result = await updateCategory(category.id, {
-        name,
-        color,
-        monthlyLimit: limit ? Number(limit) : null,
-      });
+      const result = await updateCategory(category.id, { name, color });
+      if (!result.success) toast.error(result.error);
+    });
+  }
+
+  function saveLimit(value: string) {
+    if (value === (category.monthlyLimit ?? "")) return;
+    startTransition(async () => {
+      const result = await setCategoryLimit(category.id, { monthlyLimit: value || null });
       if (!result.success) toast.error(result.error);
     });
   }
@@ -109,7 +99,7 @@ export function CategorySettingsRow({ category }: { category: SettingsCategory }
         value={name}
         disabled={isArchived}
         onChange={(event) => setName(event.target.value)}
-        onBlur={() => name !== category.name && saveField({ name })}
+        onBlur={saveName}
         className="h-8 min-w-[112px] flex-1"
       />
 
@@ -121,10 +111,7 @@ export function CategorySettingsRow({ category }: { category: SettingsCategory }
           value={limit}
           disabled={isArchived}
           onChange={(event) => setLimit(event.target.value)}
-          onBlur={() =>
-            limit !== (category.monthlyLimit ?? "") &&
-            saveField({ monthlyLimit: limit || null })
-          }
+          onBlur={(event) => saveLimit(event.target.value)}
           className="h-8 w-32 shrink-0"
         />
       )}

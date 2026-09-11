@@ -18,10 +18,8 @@ import { toast } from "sonner";
 
 import { reorderCategories } from "@/app/actions/categories";
 import { AddCategoryDialog } from "@/components/add-category-dialog";
-import {
-  CategorySettingsRow,
-  type SettingsCategory,
-} from "@/components/category-settings-row";
+import { CategorySettingsRow } from "@/components/category-settings-row";
+import type { SettingsCategory } from "@/lib/queries/categories";
 
 export function CategorySettingsList({
   kind,

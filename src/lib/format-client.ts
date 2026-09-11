@@ -8,6 +8,12 @@ export function todayIsoClient(): string {
   return new Date(now.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
 }
 
+/** Короткая дата дд.мм без года — для компактных списков операций. */
+export function formatShortDate(isoDate: string): string {
+  const [, month, day] = isoDate.split("-").map(Number);
+  return `${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}`;
+}
+
 export type MoneyFormat = { currency: string; locale: string };
 
 /** Форматирует деньги на клиенте по настройкам, переданным с сервера. */
