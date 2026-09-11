@@ -103,6 +103,7 @@ export function TransactionForm<TData = undefined>({
   const visibleCategories = showAllCategories || isSelectedInRest
     ? activeCategories
     : primaryCategories;
+  const isGoalDeposit = !!goalId;
 
   function handleEnterSubmit(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") return;
@@ -123,7 +124,7 @@ export function TransactionForm<TData = undefined>({
         form.reset({
           ...values,
           amount: 0,
-          categoryId: "",
+          categoryId: null,
           goalId: null,
           note: "",
         });
@@ -178,45 +179,89 @@ export function TransactionForm<TData = undefined>({
           <FieldError errors={[form.formState.errors.amount]} />
         </Field>
 
-        <Field data-invalid={!!form.formState.errors.categoryId}>
-          <FieldLabel>Категория</FieldLabel>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {visibleCategories.map((category) => (
-              <Button
-                key={category.id}
-                type="button"
-                variant={categoryId === category.id ? "secondary" : "outline"}
-                size="sm"
-                className="h-auto min-h-8 justify-start px-2 py-1.5 text-xs whitespace-normal"
-                onClick={() =>
-                  form.setValue("categoryId", category.id, {
-                    shouldValidate: true,
-                  })
+        {kind === "expense" && goals.length > 0 && (
+          <Field>
+            <FieldLabel>Цель</FieldLabel>
+            <Select
+              items={{
+                [NO_GOAL]: "Без цели",
+                ...Object.fromEntries(goals.map((g) => [g.id, g.title])),
+              }}
+              value={goalId ?? NO_GOAL}
+              onValueChange={(value) => {
+                const nextGoalId = value === NO_GOAL ? null : (value as string);
+                form.setValue("goalId", nextGoalId);
+                if (nextGoalId) {
+                  form.setValue("categoryId", null, { shouldValidate: true });
+                  setShowAllCategories(false);
                 }
-              >
-                <span
-                  className="inline-block size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: category.color }}
-                />
-                <span className="text-left">{category.name}</span>
-              </Button>
-            ))}
-          </div>
-          {restCategories.length > 0 && !isSelectedInRest && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={() => setShowAllCategories((prev) => !prev)}
+              }}
             >
-              {showAllCategories
-                ? "Свернуть"
-                : `Ещё ${restCategories.length}`}
-            </Button>
-          )}
-          <FieldError errors={[form.formState.errors.categoryId]} />
-        </Field>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Без цели" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_GOAL}>Без цели</SelectItem>
+                {goals.map((goal) => {
+                  const percent = Number(goal.targetAmount) > 0
+                    ? Math.min(100, Math.round((Number(goal.savedAmount) / Number(goal.targetAmount)) * 100))
+                    : 0;
+                  return (
+                    <SelectItem key={goal.id} value={goal.id}>
+                      {goal.title} ({percent}%)
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+
+        {isGoalDeposit ? (
+          <p className="text-[13px] text-muted-foreground">
+            Пополнение попадёт в категорию «Накопления».
+          </p>
+        ) : (
+          <Field data-invalid={!!form.formState.errors.categoryId}>
+            <FieldLabel>Категория</FieldLabel>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {visibleCategories.map((category) => (
+                <Button
+                  key={category.id}
+                  type="button"
+                  variant={categoryId === category.id ? "secondary" : "outline"}
+                  size="sm"
+                  className="h-auto min-h-8 justify-start px-2 py-1.5 text-xs whitespace-normal"
+                  onClick={() =>
+                    form.setValue("categoryId", category.id, {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <span
+                    className="inline-block size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: category.color }}
+                  />
+                  <span className="text-left">{category.name}</span>
+                </Button>
+              ))}
+            </div>
+            {restCategories.length > 0 && !isSelectedInRest && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => setShowAllCategories((prev) => !prev)}
+              >
+                {showAllCategories
+                  ? "Свернуть"
+                  : `Ещё ${restCategories.length}`}
+              </Button>
+            )}
+            <FieldError errors={[form.formState.errors.categoryId]} />
+          </Field>
+        )}
 
         <Field>
           <FieldLabel>Дата</FieldLabel>
@@ -318,42 +363,6 @@ export function TransactionForm<TData = undefined>({
           </Select>
         </Field>
 
-        {kind === "expense" && goals.length > 0 && (
-          <Field>
-            <FieldLabel>Цель</FieldLabel>
-            <Select
-              items={{
-                [NO_GOAL]: "Без цели",
-                ...Object.fromEntries(goals.map((g) => [g.id, g.title])),
-              }}
-              value={goalId ?? NO_GOAL}
-              onValueChange={(value) =>
-                form.setValue(
-                  "goalId",
-                  value === NO_GOAL ? null : (value as string),
-                )
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Без цели" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_GOAL}>Без цели</SelectItem>
-                {goals.map((goal) => {
-                  const percent = Number(goal.targetAmount) > 0
-                    ? Math.min(100, Math.round((Number(goal.savedAmount) / Number(goal.targetAmount)) * 100))
-                    : 0;
-                  return (
-                    <SelectItem key={goal.id} value={goal.id}>
-                      {goal.title} ({percent}%)
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </Field>
-        )}
-
         <Field>
           <FieldLabel htmlFor="note">Комментарий</FieldLabel>
           <Input
@@ -369,7 +378,11 @@ export function TransactionForm<TData = undefined>({
         )}
 
         <Button type="submit" disabled={isPending} className="w-full">
-          {mode === "create" ? "Сохранить трату" : "Сохранить изменения"}
+          {mode === "edit"
+            ? "Сохранить изменения"
+            : isGoalDeposit
+              ? "Отложить в цель"
+              : "Сохранить трату"}
         </Button>
       </FieldGroup>
     </form>

@@ -73,7 +73,7 @@ export function AddTransactionProvider({
         kind: "expense",
         amount: 0,
         occurredOn: todayIsoClient(),
-        categoryId: "",
+        categoryId: null,
         scope: "shared",
         paidByUserId: currentUserId,
         paymentMethodId: null,

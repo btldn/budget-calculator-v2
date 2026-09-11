@@ -32,7 +32,7 @@ type EditableTransaction = {
   occurredOn: string;
   kind: "expense" | "income";
   amount: string;
-  categoryId: string;
+  categoryId: string | null;
   scope: "shared" | "personal";
   paidByUserId: string;
   paymentMethodId: string | null;
