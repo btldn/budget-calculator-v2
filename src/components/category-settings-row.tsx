@@ -9,14 +9,35 @@ import { toast } from "sonner";
 import {
   setCategoryArchived,
   setCategoryLimit,
+  setCategoryPaySlot,
   updateCategory,
 } from "@/app/actions/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { SettingsCategory } from "@/lib/queries/categories";
+import type { PaySlot } from "@/lib/queries/payday";
 import { cn } from "@/lib/utils";
 
-export function CategorySettingsRow({ category }: { category: SettingsCategory }) {
+const SPLIT_EVENLY = "evenly";
+
+export function CategorySettingsRow({
+  category,
+  paySlots = [],
+  onLimitSaved,
+}: {
+  category: SettingsCategory;
+  paySlots?: PaySlot[];
+  // Список переставляет категории с лимитом наверх, поэтому ему нужно знать,
+  // когда лимит реально сохранился.
+  onLimitSaved?: (categoryId: string, monthlyLimit: string | null) => void;
+}) {
   const isArchived = !!category.archivedAt;
   const {
     attributes,
@@ -28,7 +49,11 @@ export function CategorySettingsRow({ category }: { category: SettingsCategory }
   } = useSortable({ id: category.id, disabled: isArchived });
   const [name, setName] = useState(category.name);
   const [limit, setLimit] = useState(category.monthlyLimit ?? "");
+  // Список категорий держит свои строки в state и после ревалидации не
+  // обновляется, поэтому выбранная выплата живёт здесь, а не в пропсе.
+  const [payScheduleId, setPayScheduleId] = useState(category.payScheduleId);
   const [isPending, startTransition] = useTransition();
+  const showPayControl = category.kind === "expense" && paySlots.length >= 2 && !isArchived;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -52,9 +77,26 @@ export function CategorySettingsRow({ category }: { category: SettingsCategory }
 
   function saveLimit(value: string) {
     if (value === (category.monthlyLimit ?? "")) return;
+    // Без лимита строка в БД удаляется вместе с закреплением за выплатой.
+    if (!value) setPayScheduleId(null);
     startTransition(async () => {
       const result = await setCategoryLimit(category.id, { monthlyLimit: value || null });
       if (!result.success) toast.error(result.error);
+      else onLimitSaved?.(category.id, value || null);
+    });
+  }
+
+  function savePaySlot(value: string) {
+    const next = value === SPLIT_EVENLY ? null : value;
+    if (next === payScheduleId) return;
+    const previous = payScheduleId;
+    setPayScheduleId(next);
+    startTransition(async () => {
+      const result = await setCategoryPaySlot(category.id, next);
+      if (!result.success) {
+        toast.error(result.error);
+        setPayScheduleId(previous);
+      }
     });
   }
 
@@ -115,6 +157,35 @@ export function CategorySettingsRow({ category }: { category: SettingsCategory }
           className="h-8 w-32 shrink-0"
         />
       )}
+
+      {/* Закрепить имеет смысл, только если выплат больше одной и лимит уже есть.
+          Без лимита держим пустое место такой же ширины, чтобы поля лимита
+          во всех строках стояли в одну колонку. */}
+      {showPayControl &&
+        (limit === "" ? (
+          <div aria-hidden className="h-8 w-36 shrink-0" />
+        ) : (
+          <Select
+            items={{
+              [SPLIT_EVENLY]: "Поровну",
+              ...Object.fromEntries(paySlots.map((slot) => [slot.id, `Из: ${slot.label}`])),
+            }}
+            value={payScheduleId ?? SPLIT_EVENLY}
+            onValueChange={(value) => savePaySlot(value as string)}
+          >
+            <SelectTrigger size="sm" className="w-36 shrink-0" disabled={isPending}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SPLIT_EVENLY}>Поровну</SelectItem>
+              {paySlots.map((slot) => (
+                <SelectItem key={slot.id} value={slot.id}>
+                  Из: {slot.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ))}
 
       <Button
         type="button"

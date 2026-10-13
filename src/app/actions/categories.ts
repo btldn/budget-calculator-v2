@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
-import { categories, categoryLimits } from "@/db/schema";
+import { categories, categoryLimits, paySchedules } from "@/db/schema";
 import { getCurrentUser } from "@/lib/current-user";
 import {
   categoryLimitSchema,
@@ -143,6 +143,48 @@ export async function setCategoryLimit(
       });
     }
   });
+
+  revalidateCategoryPages();
+
+  return { success: true, data: undefined };
+}
+
+// Закрепляет категорию за выплатой текущего пользователя (аренда — «из аванса»);
+// null — лимит снова делится поровну. Работает только для категории, у которой
+// уже есть лимит этого человека, и только с его собственной выплатой.
+export async function setCategoryPaySlot(
+  categoryId: string,
+  payScheduleId: string | null,
+): Promise<ActionResult> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return { success: false, error: "Не удалось определить пользователя." };
+  }
+
+  if (payScheduleId) {
+    const [slot] = await db
+      .select({ id: paySchedules.id })
+      .from(paySchedules)
+      .where(and(eq(paySchedules.id, payScheduleId), eq(paySchedules.userId, currentUser.id)));
+    if (!slot) {
+      return { success: false, error: "Такой выплаты нет. Обновите страницу." };
+    }
+  }
+
+  const updated = await db
+    .update(categoryLimits)
+    .set({ payScheduleId })
+    .where(
+      and(
+        eq(categoryLimits.categoryId, categoryId),
+        eq(categoryLimits.userId, currentUser.id),
+      ),
+    )
+    .returning({ id: categoryLimits.id });
+
+  if (updated.length === 0) {
+    return { success: false, error: "Сначала задайте лимит для этой категории." };
+  }
 
   revalidateCategoryPages();
 

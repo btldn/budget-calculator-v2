@@ -4,6 +4,7 @@ import { asc, eq, gte, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { categories, categoryLimits, paymentMethods, transactions } from "@/db/schema";
+import { limitedFirst } from "@/lib/category-order";
 
 export type CategoryOption = {
   id: string;
@@ -85,6 +86,8 @@ export type SettingsCategory = {
   archivedAt: Date | null;
   // Лимит именно currentUserId — у каждого человека своя цифра.
   monthlyLimit: string | null;
+  // Выплата, из которой категория оплачивается целиком; null — поровну.
+  payScheduleId: string | null;
 };
 
 export async function getCategoriesForSettings(currentUserId: string): Promise<{
@@ -97,12 +100,13 @@ export async function getCategoriesForSettings(currentUserId: string): Promise<{
       .select({
         categoryId: categoryLimits.categoryId,
         monthlyLimit: categoryLimits.monthlyLimit,
+        payScheduleId: categoryLimits.payScheduleId,
       })
       .from(categoryLimits)
       .where(eq(categoryLimits.userId, currentUserId)),
   ]);
 
-  const limitMap = new Map(limitRows.map((row) => [row.categoryId, row.monthlyLimit]));
+  const limitMap = new Map(limitRows.map((row) => [row.categoryId, row]));
 
   const withLimits: SettingsCategory[] = rows.map((c) => ({
     id: c.id,
@@ -110,11 +114,14 @@ export async function getCategoriesForSettings(currentUserId: string): Promise<{
     color: c.color,
     kind: c.kind,
     archivedAt: c.archivedAt,
-    monthlyLimit: limitMap.get(c.id) ?? null,
+    monthlyLimit: limitMap.get(c.id)?.monthlyLimit ?? null,
+    payScheduleId: limitMap.get(c.id)?.payScheduleId ?? null,
   }));
 
   const split = (kind: "expense" | "income") => ({
-    active: withLimits.filter((c) => c.kind === kind && !c.archivedAt),
+    active: withLimits
+      .filter((c) => c.kind === kind && !c.archivedAt)
+      .sort(limitedFirst),
     archived: withLimits.filter((c) => c.kind === kind && c.archivedAt),
   });
 
