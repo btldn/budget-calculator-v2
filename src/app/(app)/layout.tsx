@@ -4,6 +4,7 @@ import { DashboardNav } from "@/components/dashboard-nav";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { UserSwitcher } from "@/components/user-switcher";
 import { getAllUsers, getCurrentUser } from "@/lib/current-user";
+import { moneyFormat } from "@/lib/format";
 import { getAllPaymentMethods, getCategoriesByKind } from "@/lib/queries/categories";
 import { getGoals } from "@/lib/queries/goals";
 
@@ -50,6 +51,7 @@ export default async function AppLayout({
       paymentMethods={paymentMethods}
       goals={goals}
       currentUserId={currentUser.id}
+      moneyFormat={moneyFormat()}
     >
       {shell}
     </AddTransactionProvider>

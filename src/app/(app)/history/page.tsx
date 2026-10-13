@@ -12,15 +12,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { HistoryFilters } from "@/components/history-filters";
+import { PeriodTotals } from "@/components/period-totals";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
 import { getAllUsers } from "@/lib/current-user";
 import { formatDate, formatMoney } from "@/lib/format";
-import {
-  getAllCategories,
-  getAllPaymentMethods,
-  getCategoriesByKind,
-} from "@/lib/queries/categories";
-import { getGoals } from "@/lib/queries/goals";
+import { getAllCategories, getAllPaymentMethods } from "@/lib/queries/categories";
 import { getHistoryRows, type HistoryFilters as Filters } from "@/lib/queries/transactions";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -78,14 +74,12 @@ export default async function HistoryPage({
   const filters = parseFilters(sp);
   const page = Math.max(1, Number(first(sp.page)) || 1);
 
-  const [{ rows, pageCount, expenseTotal, incomeTotal }, categories, users, paymentMethods, categoriesByKind, goals] =
+  const [{ rows, pageCount, expenseTotal, incomeTotal }, categories, users, paymentMethods] =
     await Promise.all([
       getHistoryRows(filters, page),
       getAllCategories(),
       getAllUsers(),
       getAllPaymentMethods(),
-      getCategoriesByKind(),
-      getGoals(),
     ]);
 
   const exportHref = `/history/export?${buildQueryString(sp, { page: null })}`;
@@ -104,6 +98,8 @@ export default async function HistoryPage({
           Экспорт CSV
         </Button>
       </div>
+
+      <PeriodTotals income={Number(incomeTotal)} expense={Number(expenseTotal)} />
 
       <HistoryFilters
         categories={categories}
@@ -189,13 +185,7 @@ export default async function HistoryPage({
                     {formatMoney(row.amount)}
                   </TableCell>
                   <TableCell>
-                    <TransactionRowActions
-                      transaction={row}
-                      categories={categoriesByKind}
-                      users={users}
-                      paymentMethods={paymentMethods}
-                      goals={goals}
-                    />
+                    <TransactionRowActions transaction={row} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -204,48 +194,31 @@ export default async function HistoryPage({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
-        <div className="flex gap-4 text-muted-foreground">
-          <span>
-            Расходы:{" "}
-            <span className="font-medium tabular-nums text-foreground">
-              {formatMoney(expenseTotal)}
-            </span>
+      {pageCount > 1 && (
+        <div className="flex items-center justify-end gap-2 text-sm">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            nativeButton={false}
+            render={<Link href={buildHref(sp, { page: String(page - 1) })} />}
+          >
+            Назад
+          </Button>
+          <span className="text-muted-foreground">
+            стр. {page} из {pageCount}
           </span>
-          <span>
-            Доходы:{" "}
-            <span className="font-medium tabular-nums text-foreground">
-              {formatMoney(incomeTotal)}
-            </span>
-          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= pageCount}
+            nativeButton={false}
+            render={<Link href={buildHref(sp, { page: String(page + 1) })} />}
+          >
+            Вперёд
+          </Button>
         </div>
-
-        {pageCount > 1 && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              nativeButton={false}
-              render={<Link href={buildHref(sp, { page: String(page - 1) })} />}
-            >
-              Назад
-            </Button>
-            <span className="text-muted-foreground">
-              стр. {page} из {pageCount}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= pageCount}
-              nativeButton={false}
-              render={<Link href={buildHref(sp, { page: String(page + 1) })} />}
-            >
-              Вперёд
-            </Button>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

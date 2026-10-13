@@ -3,31 +3,26 @@
 import { createContext, useContext, useState } from "react";
 import { toast } from "sonner";
 
-import { createTransaction, deleteTransaction } from "@/app/actions/transactions";
+import { fetchSpendContext } from "@/app/actions/payday";
+import { deleteTransaction } from "@/app/actions/transactions";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  TransactionForm,
+  TransactionWizard,
+  type EditableTransaction,
   type GoalOption,
   type PaymentMethodOption,
   type UserOption,
-} from "@/components/transaction-form";
-import { useMediaQuery } from "@/hooks/use-media-query";
-import { todayIsoClient } from "@/lib/format-client";
+} from "@/components/transaction-wizard";
+import { WizardModal } from "@/components/wizard-frame";
+import { useWizardSession } from "@/hooks/use-wizard-session";
+import type { MoneyFormat } from "@/lib/format-client";
 import type { CategoryOption } from "@/lib/queries/categories";
 
 type AddTransactionContextValue = {
   open: () => void;
+  // Отдельный метод, а не параметр у open: тот передают прямо в onClick, и вместо
+  // категории он получил бы событие клика.
+  openForCategory: (categoryId: string) => void;
+  edit: (transaction: EditableTransaction) => void;
 };
 
 const AddTransactionContext = createContext<AddTransactionContextValue | null>(
@@ -44,12 +39,19 @@ export function useAddTransactionDialog(): AddTransactionContextValue {
   return ctx;
 }
 
+// Провайдера нет, пока не выбран пользователь, — тогда править операции нельзя,
+// но страницы, где они показаны (история), всё равно должны открываться.
+export function useEditTransaction(): AddTransactionContextValue["edit"] | null {
+  return useContext(AddTransactionContext)?.edit ?? null;
+}
+
 export function AddTransactionProvider({
   categories,
   users,
   paymentMethods,
   goals,
   currentUserId,
+  moneyFormat,
   children,
 }: {
   categories: { expense: CategoryOption[]; income: CategoryOption[] };
@@ -57,69 +59,79 @@ export function AddTransactionProvider({
   paymentMethods: PaymentMethodOption[];
   goals: GoalOption[];
   currentUserId: string;
+  moneyFormat: MoneyFormat;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const isDesktop = useMediaQuery("(min-width: 640px)");
+  // Правимая операция сохраняется и после закрытия окна — иначе на время
+  // анимации закрытия оно перерисовалось бы как «новая операция».
+  const [editing, setEditing] = useState<EditableTransaction | null>(null);
+  const [editSession, setEditSession] = useState(0);
+  // Категория, с которой открыли окно (клик по плашке на дашборде).
+  const [presetCategoryId, setPresetCategoryId] = useState<string | null>(null);
+  const { data: spend, sessionKey, start } = useWizardSession(fetchSpendContext);
 
-  const form = (
-    <TransactionForm<{ id: string }>
-      mode="create"
-      categories={categories}
-      users={users}
-      paymentMethods={paymentMethods}
-      goals={goals}
-      defaultValues={{
-        kind: "expense",
-        amount: 0,
-        occurredOn: todayIsoClient(),
-        categoryId: null,
-        scope: "shared",
-        paidByUserId: currentUserId,
-        paymentMethodId: null,
-        goalId: null,
-        note: "",
-      }}
-      onSubmit={createTransaction}
-      onSuccess={(result) => {
-        if (!result.success) return;
-        const id = result.data.id;
-        setOpen(false);
-        toast.success("Трата сохранена", {
-          action: {
-            label: "Отменить",
-            onClick: () => {
-              void deleteTransaction(id);
-            },
-          },
-        });
-      }}
-    />
-  );
+  function openDialog(categoryId: string | null = null) {
+    setEditing(null);
+    setPresetCategoryId(categoryId);
+    setOpen(true);
+    // Остатки по категориям подтягиваются в фоне: окно открывается сразу, а
+    // подписи на плитках появляются, когда ответ дошёл.
+    start();
+  }
+
+  function editTransaction(transaction: EditableTransaction) {
+    setEditing(transaction);
+    // Каждое открытие — чистый мастер; остатки при правке не нужны.
+    setEditSession((count) => count + 1);
+    setOpen(true);
+  }
+
+  function handleSaved({ id, message }: { id: string; message: string }) {
+    setOpen(false);
+    if (editing) {
+      toast.success(message);
+      return;
+    }
+    toast.success(message, {
+      action: {
+        label: "Отменить",
+        onClick: () => {
+          void deleteTransaction(id);
+        },
+      },
+    });
+  }
 
   return (
-    <AddTransactionContext.Provider value={{ open: () => setOpen(true) }}>
+    <AddTransactionContext.Provider
+      value={{
+        open: () => openDialog(),
+        openForCategory: openDialog,
+        edit: editTransaction,
+      }}
+    >
       {children}
 
-      {isDesktop ? (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Новая операция</DialogTitle>
-            </DialogHeader>
-            {form}
-          </DialogContent>
-        </Dialog>
-      ) : (
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>Новая операция</SheetTitle>
-            </SheetHeader>
-            <div className="px-4 pb-4">{form}</div>
-          </SheetContent>
-        </Sheet>
-      )}
+      <WizardModal
+        open={open}
+        onOpenChange={setOpen}
+        title={editing ? "Изменить операцию" : "Новая операция"}
+      >
+        <TransactionWizard
+          key={editing ? `edit-${editSession}` : sessionKey}
+          categories={categories}
+          users={users}
+          paymentMethods={paymentMethods}
+          goals={goals}
+          currentUserId={currentUserId}
+          moneyFormat={moneyFormat}
+          spend={editing ? null : spend}
+          presetCategoryId={editing ? undefined : (presetCategoryId ?? undefined)}
+          existing={editing ?? undefined}
+          onSaved={handleSaved}
+        />
+      </WizardModal>
     </AddTransactionContext.Provider>
   );
 }
