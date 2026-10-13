@@ -27,5 +27,17 @@ export const transactionSchema = z
     }
   });
 
+// Кнопка «Заплатил» на плашке: только то, что решает человек, остальное
+// (кто платил, «общее», способ оплаты) сервер подставляет сам.
+export const payCategorySchema = z.object({
+  categoryId: z.uuid({ error: "Категория не найдена." }),
+  amount: z.coerce
+    .number({ error: "Введите сумму." })
+    .positive({ error: "Сумма должна быть больше нуля." })
+    .max(100_000_000, { error: "Слишком большая сумма." }),
+  occurredOn: z.string().min(1, { error: "Укажите дату." }),
+});
+
+export type PayCategoryValues = z.output<typeof payCategorySchema>;
 export type TransactionFormValues = z.output<typeof transactionSchema>;
 export type TransactionFormInput = z.input<typeof transactionSchema>;

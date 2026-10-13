@@ -1,13 +1,16 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
-import { categories, goals, settings, transactions } from "@/db/schema";
+import { categories, transactions } from "@/db/schema";
 import { getCurrentUser } from "@/lib/current-user";
+import { adjustGoalSavedAmount, resolveSavingsCategoryId } from "@/lib/goal-deposits";
 import {
+  payCategorySchema,
   transactionSchema,
+  type PayCategoryValues,
   type TransactionFormValues,
 } from "@/lib/validations/transaction";
 
@@ -15,77 +18,11 @@ export type ActionResult<T = undefined> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-const SAVINGS_CATEGORY_KEY = "savings_category_id";
-const SAVINGS_CATEGORY_NAME = "Накопления";
-const SAVINGS_CATEGORY_COLOR = "#0ea5e9";
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function revalidateTransactionPages() {
   revalidatePath("/");
   revalidatePath("/history");
   revalidatePath("/goals");
   revalidatePath("/settings");
-}
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-function adjustGoalSavedAmount(
-  tx: Tx,
-  goalId: string,
-  delta: string,
-) {
-  return tx
-    .update(goals)
-    .set({ savedAmount: sql`${goals.savedAmount} + ${delta}` })
-    .where(eq(goals.id, goalId));
-}
-
-// Пополнение цели не требует категории в форме, но колонка в БД обязательная:
-// такие операции складываем в служебную категорию «Накопления». Ссылка на неё
-// живёт в settings, чтобы переименование категории ничего не ломало.
-async function resolveSavingsCategoryId(tx: Tx): Promise<string> {
-  const [pointer] = await tx
-    .select({ value: settings.value })
-    .from(settings)
-    .where(eq(settings.key, SAVINGS_CATEGORY_KEY));
-
-  if (pointer && UUID_PATTERN.test(pointer.value)) {
-    const [existing] = await tx
-      .select({ id: categories.id })
-      .from(categories)
-      .where(eq(categories.id, pointer.value));
-    if (existing) return existing.id;
-  }
-
-  const [{ maxSortOrder }] = await tx
-    .select({
-      maxSortOrder: sql<number>`coalesce(max(${categories.sortOrder}), -1)`.mapWith(
-        Number,
-      ),
-    })
-    .from(categories)
-    .where(eq(categories.kind, "expense"));
-
-  const [created] = await tx
-    .insert(categories)
-    .values({
-      name: SAVINGS_CATEGORY_NAME,
-      kind: "expense",
-      color: SAVINGS_CATEGORY_COLOR,
-      sortOrder: maxSortOrder + 1,
-    })
-    .returning({ id: categories.id });
-
-  await tx
-    .insert(settings)
-    .values({ key: SAVINGS_CATEGORY_KEY, value: created.id })
-    .onConflictDoUpdate({
-      target: settings.key,
-      set: { value: created.id },
-    });
-
-  return created.id;
 }
 
 export async function createTransaction(
@@ -130,6 +67,51 @@ export async function createTransaction(
 
     return inserted;
   });
+
+  revalidateTransactionPages();
+
+  return { success: true, data: { id: row.id } };
+}
+
+// «Заплатил» на плашке обязательного платежа: обычный расход в категорию, платит
+// текущий пользователь, «общее». Откатывается обычным deleteTransaction.
+export async function payCategory(
+  input: PayCategoryValues,
+): Promise<ActionResult<{ id: string }>> {
+  const parsed = payCategorySchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Проверьте сумму.",
+    };
+  }
+
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return { success: false, error: "Не удалось определить, кто платит." };
+  }
+
+  const [category] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(and(eq(categories.id, parsed.data.categoryId), eq(categories.kind, "expense")));
+  if (!category) {
+    return { success: false, error: "Категория не найдена. Обновите страницу." };
+  }
+
+  const [row] = await db
+    .insert(transactions)
+    .values({
+      kind: "expense",
+      amount: parsed.data.amount.toFixed(2),
+      occurredOn: parsed.data.occurredOn,
+      categoryId: category.id,
+      scope: "shared",
+      paidByUserId: currentUser.id,
+      note: "Оплачено с плашки",
+      createdByUserId: currentUser.id,
+    })
+    .returning({ id: transactions.id });
 
   revalidateTransactionPages();
 

@@ -36,6 +36,13 @@
       "when": 1789122301409,
       "tag": "0004_typical_the_anarchist",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791875547456,
+      "tag": "0005_tiny_kitty_pryde",
+      "breakpoints": true
     }
   ]
 }
