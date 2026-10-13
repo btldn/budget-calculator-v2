@@ -10,5 +10,5 @@ export async function getGoals() {
     .select()
     .from(goals)
     .where(isNull(goals.archivedAt))
-    .orderBy(asc(goals.deadline), asc(goals.title));
+    .orderBy(asc(goals.priority), asc(goals.deadline), asc(goals.title));
 }

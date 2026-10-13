@@ -1,10 +1,10 @@
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
-import { differenceInCalendarMonths } from "date-fns";
 
 import { GoalRowActions } from "@/components/goal-row-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { formatDate, formatMoney } from "@/lib/format";
+import { planGoal } from "@/lib/goals";
 
 type Goal = {
   id: string;
@@ -17,28 +17,28 @@ type Goal = {
 export function GoalCard({ goal }: { goal: Goal }) {
   const target = Number(goal.targetAmount);
   const saved = Number(goal.savedAmount);
-  const remaining = target - saved;
-  const isAchieved = remaining <= 0;
+  const plan = planGoal(goal, new Date());
+  const isAchieved = plan.status === "achieved";
   const percent = target > 0 ? Math.min(100, (saved / target) * 100) : 0;
 
   let statusLine: string;
-  if (isAchieved) {
-    statusLine = "Цель достигнута";
-  } else if (goal.deadline) {
-    const deadlineDate = new Date(`${goal.deadline}T00:00:00`);
-    const monthsLeft = differenceInCalendarMonths(deadlineDate, new Date());
-    if (monthsLeft < 0) {
+  switch (plan.status) {
+    case "achieved":
+      statusLine = "Цель достигнута";
+      break;
+    case "expired":
       statusLine = "Срок прошёл";
-    } else {
-      const perMonth = remaining / Math.max(1, monthsLeft);
-      statusLine = `Чтобы успеть к ${formatDate(goal.deadline)}, откладывайте ~${formatMoney(perMonth)}/мес`;
-    }
-  } else {
-    statusLine = `Осталось накопить ${formatMoney(remaining)}`;
+      break;
+    case "deadline":
+      statusLine = `Чтобы успеть к ${formatDate(goal.deadline!)}, откладывайте ~${formatMoney(plan.perMonth)}/мес`;
+      break;
+    case "open":
+      statusLine = `Осталось накопить ${formatMoney(plan.remaining)}`;
+      break;
   }
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardContent>
         <div className="flex items-start justify-between gap-2">
           <h2 className="font-medium">{goal.title}</h2>
@@ -63,7 +63,8 @@ export function GoalCard({ goal }: { goal: Goal }) {
           </ProgressTrack>
         </ProgressPrimitive.Root>
 
-        <p className="mt-3 text-[13px] text-muted-foreground">{statusLine}</p>
+        {/* Справа внизу карточки лежит ручка перетаскивания приоритета. */}
+        <p className="mt-3 pr-14 text-[13px] text-muted-foreground">{statusLine}</p>
       </CardContent>
     </Card>
   );

@@ -1,5 +1,6 @@
 import { AddGoalDialog } from "@/components/add-goal-dialog";
 import { GoalCard } from "@/components/goal-card";
+import { GoalList } from "@/components/goal-list";
 import { getGoals } from "@/lib/queries/goals";
 
 export default async function GoalsPage() {
@@ -17,11 +18,21 @@ export default async function GoalsPage() {
           <p className="text-muted-foreground">Пока нет целей. Добавить первую?</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {goals.map((goal) => (
-            <GoalCard key={goal.id} goal={goal} />
-          ))}
-        </div>
+        <>
+          <p className="text-sm text-muted-foreground">
+            Порядок — это приоритет: свободные деньги с зарплаты идут в цели сверху вниз.
+            Перетащите карточку за значок №, чтобы изменить очередь.
+          </p>
+          <GoalList
+            // Список держит порядок в state — пересоздаём, когда набор или
+            // порядок целей поменялся на сервере (добавили, удалили, переставили).
+            key={goals.map((goal) => goal.id).join(",")}
+            items={goals.map((goal) => ({
+              id: goal.id,
+              card: <GoalCard goal={goal} />,
+            }))}
+          />
+        </>
       )}
     </div>
   );
